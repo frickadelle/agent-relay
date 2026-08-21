@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a0238e-6918-7013-8466-8c071db72b40"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"model request failed with status 429"}}
+{"type":"turn.failed","error":{"message":"rate limited"}}
