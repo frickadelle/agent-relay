@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a0238e-6918-7013-8466-8c071db72b40"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"clamping SessionEnd hook timeout to 3s"}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"ok"}}
+{"type":"turn.completed","usage":{"input_tokens":30677,"output_tokens":95}}
