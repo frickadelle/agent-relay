@@ -1,0 +1,14 @@
+[
+  {
+    "type": "system",
+    "subtype": "init",
+    "session_id": "79b79f26-9804-4fda-98d2-74497bdb3a76"
+  },
+  {
+    "type": "result",
+    "subtype": "error_during_execution",
+    "is_error": true,
+    "result": "Permission denied for tool Bash",
+    "session_id": "79b79f26-9804-4fda-98d2-74497bdb3a76"
+  }
+]

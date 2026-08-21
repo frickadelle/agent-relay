@@ -1,0 +1,16 @@
+[
+  {
+    "type": "system",
+    "subtype": "init",
+    "session_id": "79b79f26-9804-4fda-98d2-74497bdb3a76",
+    "model": "claude-sonnet-4-5"
+  },
+  {
+    "type": "result",
+    "subtype": "success",
+    "is_error": false,
+    "result": "ok",
+    "session_id": "79b79f26-9804-4fda-98d2-74497bdb3a76",
+    "total_cost_usd": 0.0031
+  }
+]
