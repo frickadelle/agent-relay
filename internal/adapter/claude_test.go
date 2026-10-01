@@ -70,3 +70,33 @@ func TestClaudeCommand(t *testing.T) {
 		t.Error("expected error for empty prompt")
 	}
 }
+
+func TestClaudeSendThinking(t *testing.T) {
+	fixture := `[
+	  {"type":"assistant","session_id":"s1","message":{"content":[{"type":"thinking","thinking":"weigh options"},{"type":"text","text":"hi"}]}},
+	  {"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1"}
+	]`
+	c := &Claude{bin: stubBin(t, "claude", fixture, 0)}
+	reply, err := c.Send(context.Background(), Request{Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if reply.Text != "ok" {
+		t.Errorf("Text = %q, want ok", reply.Text)
+	}
+	if reply.Thinking != "weigh options" {
+		t.Errorf("Thinking = %q, want assistant thinking", reply.Thinking)
+	}
+}
+
+func TestClaudeSendSingleObject(t *testing.T) {
+	fixture := `{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1"}`
+	c := &Claude{bin: stubBin(t, "claude", fixture, 0)}
+	reply, err := c.Send(context.Background(), Request{Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if reply.Text != "ok" || reply.SessionID != "s1" {
+		t.Errorf("got %+v, want text ok session s1", reply)
+	}
+}

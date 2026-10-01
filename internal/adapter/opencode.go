@@ -26,7 +26,7 @@ func (o *OpenCode) Command(req Request) ([]string, error) {
 	if strings.TrimSpace(req.Prompt) == "" {
 		return nil, fmt.Errorf("opencode: empty prompt")
 	}
-	args := []string{o.bin, "run", "--format", "json"}
+	args := []string{o.bin, "run", "--format", "json", "--thinking"}
 	if req.Session != "" {
 		args = append(args, "-s", req.Session)
 	}
@@ -68,6 +68,8 @@ func (o *OpenCode) Send(ctx context.Context, req Request) (Reply, error) {
 	var sessionID string
 	var order []string
 	parts := map[string]string{}
+	var thinkOrder []string
+	thinkParts := map[string]string{}
 	var errMsgs []string
 	for _, line := range strings.Split(stdout, "\n") {
 		line = strings.TrimSpace(line)
@@ -87,6 +89,11 @@ func (o *OpenCode) Send(ctx context.Context, req Request) (Reply, error) {
 				order = append(order, ev.Part.ID)
 			}
 			parts[ev.Part.ID] = ev.Part.Text
+		case ev.Type == "reasoning" && ev.Part != nil && ev.Part.ID != "":
+			if _, seen := thinkParts[ev.Part.ID]; !seen {
+				thinkOrder = append(thinkOrder, ev.Part.ID)
+			}
+			thinkParts[ev.Part.ID] = ev.Part.Text
 		case ev.Type == "error" && ev.Error != nil:
 			msg := ev.Error.Data.Message
 			if msg == "" {
@@ -103,6 +110,14 @@ func (o *OpenCode) Send(ctx context.Context, req Request) (Reply, error) {
 		b.WriteString(parts[id])
 	}
 	text := strings.TrimSpace(b.String())
+	var tb strings.Builder
+	for i, id := range thinkOrder {
+		if i > 0 {
+			tb.WriteString("\n\n")
+		}
+		tb.WriteString(strings.TrimSpace(thinkParts[id]))
+	}
+	thinking := strings.TrimSpace(tb.String())
 	if err != nil {
 		return Reply{}, fail("opencode", stderr, strings.Join(errMsgs, "; "), err)
 	}
@@ -112,6 +127,7 @@ func (o *OpenCode) Send(ctx context.Context, req Request) (Reply, error) {
 	return Reply{
 		Agent:      o.Name(),
 		Text:       text,
+		Thinking:   thinking,
 		SessionID:  sessionID,
 		DurationMS: int(time.Since(start).Milliseconds()),
 	}, nil

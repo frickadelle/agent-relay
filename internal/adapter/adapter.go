@@ -22,6 +22,7 @@ type Request struct {
 type Reply struct {
 	Agent      string `json:"agent"`
 	Text       string `json:"text"`
+	Thinking   string `json:"thinking,omitempty"`
 	SessionID  string `json:"session_id"`
 	DurationMS int    `json:"duration_ms"`
 }

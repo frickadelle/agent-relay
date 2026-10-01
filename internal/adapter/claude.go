@@ -37,11 +37,22 @@ func (c *Claude) Command(req Request) ([]string, error) {
 }
 
 type claudeEvent struct {
-	Type      string `json:"type"`
-	Subtype   string `json:"subtype"`
-	Result    string `json:"result"`
-	SessionID string `json:"session_id"`
-	IsError   bool   `json:"is_error"`
+	Type      string         `json:"type"`
+	Subtype   string         `json:"subtype"`
+	Result    string         `json:"result"`
+	SessionID string         `json:"session_id"`
+	IsError   bool           `json:"is_error"`
+	Message   *claudeMessage `json:"message"`
+}
+
+type claudeMessage struct {
+	Content []claudeBlock `json:"content"`
+}
+
+type claudeBlock struct {
+	Type     string `json:"type"`
+	Thinking string `json:"thinking"`
+	Text     string `json:"text"`
 }
 
 func (c *Claude) Send(ctx context.Context, req Request) (Reply, error) {
@@ -56,12 +67,26 @@ func (c *Claude) Send(ctx context.Context, req Request) (Reply, error) {
 	}
 	var events []claudeEvent
 	if err := json.Unmarshal([]byte(stdout), &events); err != nil {
-		return Reply{}, fmt.Errorf("claude: parse output: %w", err)
+		// Modern `claude -p --output-format json` emits a single object,
+		// older versions emit an array of events.
+		var single claudeEvent
+		if err2 := json.Unmarshal([]byte(stdout), &single); err2 != nil {
+			return Reply{}, fmt.Errorf("claude: parse output: %w", err)
+		}
+		events = []claudeEvent{single}
 	}
 	var result *claudeEvent
+	var thinking []string
 	for i := range events {
 		if events[i].Type == "result" {
 			result = &events[i]
+		}
+		if events[i].Type == "assistant" && events[i].Message != nil {
+			for _, b := range events[i].Message.Content {
+				if b.Type == "thinking" && strings.TrimSpace(b.Thinking) != "" {
+					thinking = append(thinking, strings.TrimSpace(b.Thinking))
+				}
+			}
 		}
 	}
 	if result == nil {
@@ -73,6 +98,7 @@ func (c *Claude) Send(ctx context.Context, req Request) (Reply, error) {
 	return Reply{
 		Agent:      c.Name(),
 		Text:       result.Result,
+		Thinking:   strings.Join(thinking, "\n\n"),
 		SessionID:  result.SessionID,
 		DurationMS: int(time.Since(start).Milliseconds()),
 	}, nil

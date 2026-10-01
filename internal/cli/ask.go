@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frickadelle/agent-relay/internal/activity"
 	"github.com/frickadelle/agent-relay/internal/adapter"
 	"github.com/frickadelle/agent-relay/internal/config"
 	"github.com/frickadelle/agent-relay/internal/session"
@@ -22,6 +23,7 @@ var (
 	askDryRun   bool
 	askContinue string
 	askNoSave   bool
+	askRoom     string
 )
 
 var askCmd = &cobra.Command{
@@ -52,6 +54,9 @@ func runAsk(cmd *cobra.Command, agent, prompt string) error {
 		}
 	} else if !askNoSave {
 		sess = session.New(askWorkdir)
+	}
+	if sess != nil && askRoom != "" {
+		sess.Room = askRoom
 	}
 
 	req := adapter.Request{
@@ -89,13 +94,15 @@ func runAsk(cmd *cobra.Command, agent, prompt string) error {
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
+	doneActive := trackCall(agent, prompt, sess)
+	defer doneActive()
 	reply, err := a.Send(ctx, req)
 	if err != nil {
 		return err
 	}
 
 	if sess != nil {
-		sess.AddTurn(agent, reply.SessionID, prompt, reply.Text)
+		sess.AddTurn(agent, reply.SessionID, prompt, reply.Text, reply.Thinking)
 		if err := session.Save(sess); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not save session: %v\n", err)
 		} else {
@@ -110,6 +117,22 @@ func runAsk(cmd *cobra.Command, agent, prompt string) error {
 	return nil
 }
 
+// trackCall announces this call in the activity dir so other chats can see
+// who works on what right now. The entry is removed when the call ends.
+func trackCall(agent, prompt string, sess *session.Session) func() {
+	a := activity.Active{Agent: agent, Workdir: askWorkdir, Room: askRoom, Prompt: prompt}
+	if sess != nil {
+		a.RelaySession = sess.ID
+		if a.Workdir == "" {
+			a.Workdir = sess.Workdir
+		}
+		if a.Room == "" {
+			a.Room = sess.Room
+		}
+	}
+	return activity.Track(a)
+}
+
 func init() {
 	askCmd.Flags().StringVar(&askWorkdir, "workdir", "", "working directory for the agent")
 	askCmd.Flags().StringVar(&askModel, "model", "", "model override")
@@ -118,5 +141,6 @@ func init() {
 	askCmd.Flags().BoolVar(&askDryRun, "dry-run", false, "print the command that would run")
 	askCmd.Flags().StringVar(&askContinue, "continue", "", "continue this relay session")
 	askCmd.Flags().BoolVar(&askNoSave, "no-save", false, "do not track this call in a session")
+	askCmd.Flags().StringVar(&askRoom, "room", "", "topic room tag for the session (creates the room on first use)")
 	rootCmd.AddCommand(askCmd)
 }

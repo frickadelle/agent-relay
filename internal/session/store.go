@@ -17,17 +17,19 @@ import (
 const previewLen = 300
 
 type Turn struct {
-	Agent         string    `json:"agent"`
-	NativeID      string    `json:"native_session,omitempty"`
-	PromptPreview string    `json:"prompt_preview,omitempty"`
-	ReplyPreview  string    `json:"reply_preview,omitempty"`
-	At            time.Time `json:"at"`
+	Agent           string    `json:"agent"`
+	NativeID        string    `json:"native_session,omitempty"`
+	PromptPreview   string    `json:"prompt_preview,omitempty"`
+	ReplyPreview    string    `json:"reply_preview,omitempty"`
+	ThinkingPreview string    `json:"thinking_preview,omitempty"`
+	At              time.Time `json:"at"`
 }
 
 type Session struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	Workdir   string    `json:"workdir,omitempty"`
+	Room      string    `json:"room,omitempty"`
 	Turns     []Turn    `json:"turns"`
 }
 
@@ -123,12 +125,13 @@ func (s *Session) LastNativeID(agent string) string {
 	return ""
 }
 
-func (s *Session) AddTurn(agent, nativeID, prompt, reply string) {
+func (s *Session) AddTurn(agent, nativeID, prompt, reply, thinking string) {
 	s.Turns = append(s.Turns, Turn{
-		Agent:         agent,
-		NativeID:      nativeID,
-		PromptPreview: truncate(prompt),
-		ReplyPreview:  truncate(reply),
-		At:            time.Now(),
+		Agent:           agent,
+		NativeID:        nativeID,
+		PromptPreview:   truncate(prompt),
+		ReplyPreview:    truncate(reply),
+		ThinkingPreview: truncate(thinking),
+		At:              time.Now(),
 	})
 }

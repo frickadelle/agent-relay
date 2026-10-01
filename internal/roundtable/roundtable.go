@@ -11,16 +11,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frickadelle/agent-relay/internal/activity"
 	"github.com/frickadelle/agent-relay/internal/adapter"
 	"github.com/frickadelle/agent-relay/internal/config"
 )
 
 const MaxRounds = 10
 
+// DefaultMaxThinking caps reasoning context per turn (in chars) so one
+// verbose thinker cannot blow up the prompt of every other agent.
+const DefaultMaxThinking = 4000
+
 type Turn struct {
 	Round    int       `json:"round"`
 	Agent    string    `json:"agent"`
 	Text     string    `json:"text"`
+	Thinking string    `json:"thinking,omitempty"`
 	NativeID string    `json:"native_session,omitempty"`
 	At       time.Time `json:"at"`
 }
@@ -30,6 +36,8 @@ type Panel struct {
 	Topic          string
 	Rounds         int
 	Workdir        string
+	MaxThinking    int
+	Roles          map[string]string
 	Sandbox        func(agent string) string
 	Timeout        func(agent string) time.Duration
 	OnTurn         func(Turn)
@@ -82,6 +90,15 @@ func (p *Panel) Run(ctx context.Context) ([]Turn, error) {
 	if p.Rounds < 1 || p.Rounds > MaxRounds {
 		return nil, fmt.Errorf("rounds must be between 1 and %d", MaxRounds)
 	}
+	known := map[string]bool{}
+	for _, a := range p.Agents {
+		known[a.Name()] = true
+	}
+	for name := range p.Roles {
+		if !known[name] {
+			return nil, fmt.Errorf("role for unknown agent %q (panel has: %s)", name, strings.Join(agentNames(p.Agents), ", "))
+		}
+	}
 
 	tw, err := openTranscript(newPanelID())
 	if err != nil {
@@ -114,12 +131,18 @@ func (p *Panel) Run(ctx context.Context) ([]Turn, error) {
 				turnCtx, cancel = context.WithTimeout(ctx, p.Timeout(name))
 				defer cancel()
 			}
+			doneActive := activity.Track(activity.Active{
+				Agent:   name,
+				Workdir: p.Workdir,
+				Topic:   p.Topic,
+			})
 			reply, err := a.Send(turnCtx, req)
+			doneActive()
 			if err != nil {
 				return transcript, fmt.Errorf("round %d, %s: %w", round, name, err)
 			}
 			native[name] = reply.SessionID
-			turn := Turn{Round: round, Agent: name, Text: reply.Text, NativeID: reply.SessionID, At: time.Now()}
+			turn := Turn{Round: round, Agent: name, Text: reply.Text, Thinking: reply.Thinking, NativeID: reply.SessionID, At: time.Now()}
 			transcript = append(transcript, turn)
 			seen[name] = len(transcript)
 			if err := tw.write(turn); err != nil {
@@ -133,13 +156,29 @@ func (p *Panel) Run(ctx context.Context) ([]Turn, error) {
 	return transcript, nil
 }
 
+func agentNames(agents []adapter.Adapter) []string {
+	names := make([]string, 0, len(agents))
+	for _, a := range agents {
+		names = append(names, a.Name())
+	}
+	return names
+}
+
 func (p *Panel) turnPrompt(agent string, delta []Turn, first bool) string {
 	var b strings.Builder
+	role, expert := p.Roles[agent]
+	identity := fmt.Sprintf("You are %q, one participant in a panel of AI coding agents.", agent)
+	if expert {
+		identity = fmt.Sprintf("You are %q, the %s in a panel of AI coding agents.", agent, role)
+	}
 	if first {
-		fmt.Fprintf(&b, "You are %q, one participant in a panel of AI coding agents.\n\nTopic: %s\n\nRules:\n- Respond with your own contribution only.\n- Be concise; a few sentences unless code is needed.\n", agent, p.Topic)
+		fmt.Fprintf(&b, "%s\n\nTopic: %s\n\nRules:\n- Respond with your own contribution only.\n- Be concise; a few sentences unless code is needed.\n", identity, p.Topic)
+		if expert {
+			fmt.Fprintf(&b, "- Argue from your expert perspective as %s; defer to other experts outside your domain.\n", role)
+		}
 		if len(delta) > 0 {
 			b.WriteString("\nTranscript so far:\n")
-			renderTranscript(&b, delta)
+			p.renderTranscript(&b, delta)
 			b.WriteString("\nAdd the first contribution from your perspective.")
 		} else {
 			b.WriteString("\nOpen the discussion with the first contribution from your perspective.")
@@ -147,9 +186,15 @@ func (p *Panel) turnPrompt(agent string, delta []Turn, first bool) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Panel discussion continuation. Topic: %s\n", p.Topic)
+	if expert {
+		fmt.Fprintf(&b, "Your expert role: %s. Respond from that perspective.\n", role)
+	}
 	if len(delta) > 0 {
 		b.WriteString("\nMessages from the other participants since your last turn:\n")
-		renderTranscript(&b, delta)
+		p.renderTranscript(&b, delta)
+		if p.MaxThinking > 0 {
+			b.WriteString("\nLines marked (thinking) are reasoning context only; respond to the conclusions, do not repeat the thinking.\n")
+		}
 	} else {
 		b.WriteString("\nNo new messages from the others since your last turn.\n")
 	}
@@ -157,8 +202,19 @@ func (p *Panel) turnPrompt(agent string, delta []Turn, first bool) string {
 	return b.String()
 }
 
-func renderTranscript(b *strings.Builder, turns []Turn) {
+func (p *Panel) renderTranscript(b *strings.Builder, turns []Turn) {
 	for _, t := range turns {
 		fmt.Fprintf(b, "[round %d] %s: %s\n", t.Round, t.Agent, t.Text)
+		if p.MaxThinking > 0 && strings.TrimSpace(t.Thinking) != "" {
+			fmt.Fprintf(b, "[round %d] %s (thinking): %s\n", t.Round, t.Agent, truncateThinking(t.Thinking, p.MaxThinking))
+		}
 	}
+}
+
+func truncateThinking(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if len(s) > max {
+		return s[:max] + "\n…(thinking truncated)"
+	}
+	return s
 }

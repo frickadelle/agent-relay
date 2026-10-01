@@ -8,8 +8,8 @@ import (
 func TestSaveLoadRoundtrip(t *testing.T) {
 	t.Setenv("AGENT_RELAY_CONFIG_DIR", t.TempDir())
 	s := New("/tmp/project")
-	s.AddTurn("claude", "uuid-1", "what is this repo", "it is a cli tool")
-	s.AddTurn("codex", "thread-1", "review it", "looks good")
+	s.AddTurn("claude", "uuid-1", "what is this repo", "it is a cli tool", "weigh options")
+	s.AddTurn("codex", "thread-1", "review it", "looks good", "")
 	if err := Save(s); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -30,9 +30,9 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 
 func TestLastNativeIDPrefersLatest(t *testing.T) {
 	s := &Session{}
-	s.AddTurn("claude", "old", "a", "b")
-	s.AddTurn("codex", "mid", "c", "d")
-	s.AddTurn("claude", "new", "e", "f")
+	s.AddTurn("claude", "old", "a", "b", "")
+	s.AddTurn("codex", "mid", "c", "d", "")
+	s.AddTurn("claude", "new", "e", "f", "")
 	if got := s.LastNativeID("claude"); got != "new" {
 		t.Errorf("LastNativeID(claude) = %q, want new", got)
 	}
@@ -85,8 +85,40 @@ func TestPreviewTruncation(t *testing.T) {
 		long[i] = 'x'
 	}
 	s := New("")
-	s.AddTurn("claude", "", string(long), "")
+	s.AddTurn("claude", "", string(long), "", "")
 	if len(s.Turns[0].PromptPreview) > previewLen+3 {
 		t.Errorf("preview not truncated: %d chars", len(s.Turns[0].PromptPreview))
+	}
+}
+
+func TestThinkingPreviewRoundtrip(t *testing.T) {
+	t.Setenv("AGENT_RELAY_CONFIG_DIR", t.TempDir())
+	s := New("/tmp/project")
+	s.AddTurn("codex", "thread-1", "review it", "looks good", "checked edge cases")
+	if err := Save(s); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Turns[0].ThinkingPreview != "checked edge cases" {
+		t.Errorf("ThinkingPreview = %q, want reasoning text", got.Turns[0].ThinkingPreview)
+	}
+}
+
+func TestRoomRoundtrip(t *testing.T) {
+	t.Setenv("AGENT_RELAY_CONFIG_DIR", t.TempDir())
+	s := New("/tmp/project")
+	s.Room = "billing-migration"
+	if err := Save(s); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Room != "billing-migration" {
+		t.Errorf("Room = %q, want billing-migration", got.Room)
 	}
 }

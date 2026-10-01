@@ -38,9 +38,26 @@ func TestOpenCodeCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(argv, " ")
-	for _, want := range []string{"run --format json", "-s ses_1", "-m opencode/hy3-free"} {
+	for _, want := range []string{"run --format json", "--thinking", "-s ses_1", "-m opencode/hy3-free"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv missing %q: %v", want, argv)
 		}
+	}
+}
+
+func TestOpenCodeSendReasoning(t *testing.T) {
+	fixture := "{\"type\":\"step_start\",\"sessionID\":\"ses_1\",\"part\":{\"id\":\"p0\",\"type\":\"step-start\"}}\n" +
+		"{\"type\":\"reasoning\",\"sessionID\":\"ses_1\",\"part\":{\"id\":\"r1\",\"type\":\"reasoning\",\"text\":\"consider edge cases\"}}\n" +
+		"{\"type\":\"text\",\"sessionID\":\"ses_1\",\"part\":{\"id\":\"t1\",\"type\":\"text\",\"text\":\"ok\"}}\n"
+	o := &OpenCode{bin: stubBin(t, "opencode", fixture, 0)}
+	reply, err := o.Send(context.Background(), Request{Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if reply.Text != "ok" {
+		t.Errorf("Text = %q, want ok", reply.Text)
+	}
+	if reply.Thinking != "consider edge cases" {
+		t.Errorf("Thinking = %q, want reasoning text", reply.Thinking)
 	}
 }

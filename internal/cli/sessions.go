@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/frickadelle/agent-relay/internal/session"
@@ -13,6 +14,9 @@ var sessionsCmd = &cobra.Command{
 	Short: "Manage relay sessions",
 }
 
+var sessionsListWorkdir string
+var sessionsListRoom string
+
 var sessionsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List relay sessions, newest first",
@@ -20,6 +24,12 @@ var sessionsListCmd = &cobra.Command{
 		list, err := session.List()
 		if err != nil {
 			return err
+		}
+		if sessionsListWorkdir != "" {
+			list = filterByWorkdir(list, sessionsListWorkdir)
+		}
+		if sessionsListRoom != "" {
+			list = filterByRoom(list, sessionsListRoom)
 		}
 		if len(list) == 0 {
 			fmt.Println("no sessions yet")
@@ -34,11 +44,44 @@ var sessionsListCmd = &cobra.Command{
 			for a := range agents {
 				names = append(names, a)
 			}
-			fmt.Printf("%s  %s  %d turns  [%s]\n",
-				s.ID, s.CreatedAt.Format("2006-01-02 15:04"), len(s.Turns), strings.Join(names, ", "))
+			workdir := s.Workdir
+			if workdir == "" {
+				workdir = "-"
+			}
+			room := s.Room
+			if room == "" {
+				room = "-"
+			}
+			fmt.Printf("%s  %s  %d turns  [%s]  %s  room:%s\n",
+				s.ID, s.CreatedAt.Format("2006-01-02 15:04"), len(s.Turns), strings.Join(names, ", "), workdir, room)
 		}
 		return nil
 	},
+}
+
+// filterByRoom keeps sessions tagged with exactly this room name.
+func filterByRoom(list []*session.Session, room string) []*session.Session {
+	var out []*session.Session
+	for _, s := range list {
+		if s.Room == room {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// filterByWorkdir keeps sessions that ran in dir or below it, so one project
+// directory lists exactly the chats that worked on it.
+func filterByWorkdir(list []*session.Session, dir string) []*session.Session {
+	dir = filepath.Clean(dir)
+	var out []*session.Session
+	for _, s := range list {
+		wd := filepath.Clean(s.Workdir)
+		if wd == dir || strings.HasPrefix(wd, dir+string(filepath.Separator)) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 var sessionsShowCmd = &cobra.Command{
@@ -54,6 +97,9 @@ var sessionsShowCmd = &cobra.Command{
 		if s.Workdir != "" {
 			fmt.Printf("workdir %s\n", s.Workdir)
 		}
+		if s.Room != "" {
+			fmt.Printf("room %s\n", s.Room)
+		}
 		for i, t := range s.Turns {
 			fmt.Printf("\n--- turn %d: %s at %s ---\n", i+1, t.Agent, t.At.Format("15:04:05"))
 			if t.NativeID != "" {
@@ -61,6 +107,9 @@ var sessionsShowCmd = &cobra.Command{
 			}
 			fmt.Printf("prompt: %s\n", t.PromptPreview)
 			fmt.Printf("reply:  %s\n", t.ReplyPreview)
+			if t.ThinkingPreview != "" {
+				fmt.Printf("thinking: %s\n", t.ThinkingPreview)
+			}
 		}
 		return nil
 	},
@@ -76,6 +125,8 @@ var sessionsRmCmd = &cobra.Command{
 }
 
 func init() {
+	sessionsListCmd.Flags().StringVar(&sessionsListWorkdir, "workdir", "", "only list sessions for this project directory (includes subdirectories)")
+	sessionsListCmd.Flags().StringVar(&sessionsListRoom, "room", "", "only list sessions tagged with this room")
 	sessionsCmd.AddCommand(sessionsListCmd, sessionsShowCmd, sessionsRmCmd)
 	rootCmd.AddCommand(sessionsCmd)
 }

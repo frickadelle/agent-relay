@@ -63,6 +63,7 @@ func (c *Codex) Send(ctx context.Context, req Request) (Reply, error) {
 
 	var sessionID string
 	var text string
+	var thinking []string
 	var errMsgs []string
 	for _, line := range strings.Split(stdout, "\n") {
 		line = strings.TrimSpace(line)
@@ -78,6 +79,10 @@ func (c *Codex) Send(ctx context.Context, req Request) (Reply, error) {
 			sessionID = ev.ThreadID
 		case ev.Type == "item.completed" && ev.Item != nil && ev.Item.Type == "agent_message":
 			text = ev.Item.Text
+		case ev.Type == "item.completed" && ev.Item != nil && ev.Item.Type == "reasoning":
+			if strings.TrimSpace(ev.Item.Text) != "" {
+				thinking = append(thinking, strings.TrimSpace(ev.Item.Text))
+			}
 		case ev.Type == "item.completed" && ev.Item != nil && ev.Item.Type == "error":
 			errMsgs = append(errMsgs, ev.Item.Message)
 		}
@@ -91,6 +96,7 @@ func (c *Codex) Send(ctx context.Context, req Request) (Reply, error) {
 	return Reply{
 		Agent:      c.Name(),
 		Text:       text,
+		Thinking:   strings.Join(thinking, "\n\n"),
 		SessionID:  sessionID,
 		DurationMS: int(time.Since(start).Milliseconds()),
 	}, nil

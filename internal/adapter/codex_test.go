@@ -31,6 +31,24 @@ func TestCodexSendFailure(t *testing.T) {
 	}
 }
 
+func TestCodexSendReasoning(t *testing.T) {
+	fixture := "{\"type\":\"thread.started\",\"thread_id\":\"thr_1\"}\n" +
+		"{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"reasoning\",\"text\":\"check plan first\"}}\n" +
+		"{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"reasoning\",\"text\":\"then edit\"}}\n" +
+		"{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"agent_message\",\"text\":\"ok\"}}\n"
+	c := &Codex{bin: stubBin(t, "codex", fixture, 0)}
+	reply, err := c.Send(context.Background(), Request{Prompt: "hi"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if reply.Text != "ok" {
+		t.Errorf("Text = %q, want ok", reply.Text)
+	}
+	if !strings.Contains(reply.Thinking, "check plan first") || !strings.Contains(reply.Thinking, "then edit") {
+		t.Errorf("Thinking = %q, want both reasoning items", reply.Thinking)
+	}
+}
+
 func TestCodexCommand(t *testing.T) {
 	c := newCodex()
 	argv, err := c.Command(Request{Prompt: "go", Session: "t1", Model: "gpt-5.2", Sandbox: "read-only"})

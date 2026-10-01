@@ -13,6 +13,7 @@ import (
 type fakeAdapter struct {
 	name     string
 	replies  []string
+	thinking []string
 	calls    int
 	sessions []string
 	failAt   int
@@ -31,9 +32,14 @@ func (f *fakeAdapter) Send(ctx context.Context, req adapter.Request) (adapter.Re
 		return adapter.Reply{}, fmt.Errorf("boom on call %d", f.calls)
 	}
 	text := f.replies[(f.calls-1)%len(f.replies)]
+	think := ""
+	if len(f.thinking) > 0 {
+		think = f.thinking[(f.calls-1)%len(f.thinking)]
+	}
 	return adapter.Reply{
 		Agent:     f.name,
 		Text:      text,
+		Thinking:  think,
 		SessionID: fmt.Sprintf("%s-native-%d", f.name, f.calls),
 	}, nil
 }
@@ -123,6 +129,68 @@ func TestTurnPromptContainsDelta(t *testing.T) {
 	next := p.turnPrompt("claude", delta, false)
 	if !strings.Contains(next, "[round 1] codex: I like rust") {
 		t.Errorf("delta prompt missing transcript line: %q", next)
+	}
+}
+
+func TestTurnPromptContainsThinking(t *testing.T) {
+	p := &Panel{Topic: "gophers", MaxThinking: DefaultMaxThinking}
+	delta := []Turn{{Round: 1, Agent: "codex", Text: "done", Thinking: "checked edge cases"}}
+	next := p.turnPrompt("claude", delta, false)
+	if !strings.Contains(next, "[round 1] codex: done") {
+		t.Errorf("prompt missing answer line: %q", next)
+	}
+	if !strings.Contains(next, "[round 1] codex (thinking): checked edge cases") {
+		t.Errorf("prompt missing thinking context: %q", next)
+	}
+}
+
+func TestTurnPromptThinkingDisabled(t *testing.T) {
+	p := &Panel{Topic: "gophers", MaxThinking: 0}
+	delta := []Turn{{Round: 1, Agent: "codex", Text: "done", Thinking: "checked edge cases"}}
+	next := p.turnPrompt("claude", delta, false)
+	if strings.Contains(next, "(thinking)") {
+		t.Errorf("prompt should omit thinking when disabled: %q", next)
+	}
+	if !strings.Contains(next, "[round 1] codex: done") {
+		t.Errorf("prompt missing answer line: %q", next)
+	}
+}
+
+func TestTurnPromptThinkingTruncated(t *testing.T) {
+	p := &Panel{Topic: "gophers", MaxThinking: 10}
+	delta := []Turn{{Round: 1, Agent: "codex", Text: "done", Thinking: "0123456789abcdef"}}
+	next := p.turnPrompt("claude", delta, false)
+	if strings.Contains(next, "abcdef") {
+		t.Errorf("prompt should truncate thinking: %q", next)
+	}
+	if !strings.Contains(next, "(thinking truncated)") {
+		t.Errorf("prompt missing truncation marker: %q", next)
+	}
+}
+
+func TestTurnPromptRoles(t *testing.T) {
+	p := &Panel{Topic: "gophers", Roles: map[string]string{"claude": "security expert"}}
+	first := p.turnPrompt("claude", nil, true)
+	if !strings.Contains(first, `the security expert`) {
+		t.Errorf("first prompt missing expert identity: %q", first)
+	}
+	next := p.turnPrompt("claude", []Turn{{Round: 1, Agent: "codex", Text: "hi"}}, false)
+	if !strings.Contains(next, "Your expert role: security expert") {
+		t.Errorf("continuation missing expert role: %q", next)
+	}
+	plain := (&Panel{Topic: "gophers"}).turnPrompt("codex", nil, true)
+	if strings.Contains(plain, "expert") {
+		t.Errorf("prompt without role should not mention expert: %q", plain)
+	}
+}
+
+func TestRunRejectsUnknownRoleAgent(t *testing.T) {
+	t.Setenv("AGENT_RELAY_CONFIG_DIR", t.TempDir())
+	a, _ := twoFakes()
+	p := &Panel{Agents: []adapter.Adapter{a}, Topic: "x", Rounds: 1,
+		Roles: map[string]string{"ghost": "expert"}}
+	if _, err := p.Run(context.Background()); err == nil {
+		t.Error("expected error for role on unknown agent")
 	}
 }
 
