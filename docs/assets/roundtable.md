@@ -19,7 +19,7 @@ Constraints: strong readable silhouettes; clearly oval tabletop plus short legs 
 
 The initial automatic raster conversion produced noisy shading and was replaced
 with hand-drawn ASCII outlines. The scene uses labeled robot faces, three laptops
-and one shared table, with a maximum width of 68 characters.
+and one shared table, with a maximum width of 69 characters.
 
 `roundtable.txt` exactly matches the README fenced block. These are conceptual
 mascots, rather than official harness logos.
