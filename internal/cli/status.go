@@ -39,15 +39,9 @@ var statusCmd = &cobra.Command{
 			}
 		}
 
-		list, err := session.List()
+		list, err := session.ListFiltered(session.Filter{Room: statusRoom, Workdir: statusWorkdir})
 		if err != nil {
 			return err
-		}
-		if statusRoom != "" {
-			list = filterByRoom(list, statusRoom)
-		}
-		if statusWorkdir != "" {
-			list = filterByWorkdir(list, statusWorkdir)
 		}
 		if len(list) > recentLimit {
 			list = list[:recentLimit]

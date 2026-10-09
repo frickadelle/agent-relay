@@ -17,6 +17,7 @@ type Agent struct {
 
 type Config struct {
 	DefaultTimeout string           `toml:"default_timeout"`
+	SessionStorage string           `toml:"session_storage"`
 	Agents         map[string]Agent `toml:"agents"`
 }
 
@@ -41,6 +42,7 @@ func Path() string {
 func Default() *Config {
 	return &Config{
 		DefaultTimeout: "10m",
+		SessionStorage: "json",
 		Agents:         map[string]Agent{},
 	}
 }
@@ -56,6 +58,9 @@ func Load() (*Config, error) {
 	}
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", Path(), err)
+	}
+	if cfg.SessionStorage != "json" && cfg.SessionStorage != "sqlite" {
+		return nil, fmt.Errorf("invalid session_storage %q (want json or sqlite)", cfg.SessionStorage)
 	}
 	return cfg, nil
 }

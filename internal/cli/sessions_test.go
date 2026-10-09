@@ -12,34 +12,6 @@ func testSession(id, workdir, room string, at time.Time) *session.Session {
 	return &session.Session{ID: id, CreatedAt: at, Workdir: workdir, Room: room}
 }
 
-func TestFilterByRoom(t *testing.T) {
-	list := []*session.Session{
-		testSession("a", "/p", "billing", time.Now()),
-		testSession("b", "/p", "", time.Now()),
-		testSession("c", "/p", "billing", time.Now()),
-	}
-	got := filterByRoom(list, "billing")
-	if len(got) != 2 || got[0].ID != "a" || got[1].ID != "c" {
-		t.Errorf("filterByRoom = %v, want sessions a and c", got)
-	}
-	if got := filterByRoom(list, "missing"); len(got) != 0 {
-		t.Errorf("filterByRoom(missing) = %v, want empty", got)
-	}
-}
-
-func TestFilterByWorkdir(t *testing.T) {
-	list := []*session.Session{
-		testSession("a", "/projects/api", "", time.Now()),
-		testSession("b", "/projects/api/sub", "", time.Now()),
-		testSession("c", "/projects/other", "", time.Now()),
-		testSession("d", "", "", time.Now()),
-	}
-	got := filterByWorkdir(list, "/projects/api")
-	if len(got) != 2 || got[0].ID != "a" || got[1].ID != "b" {
-		t.Errorf("filterByWorkdir = %v, want sessions a and b", got)
-	}
-}
-
 func TestParseRoles(t *testing.T) {
 	roles, err := parseRoles("claude:security expert,codex:API designer")
 	if err != nil {

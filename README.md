@@ -56,6 +56,26 @@ A relay session maps each agent to its own native thread (claude session uuid, c
 
 `sessions list` shows the workdir column so you can see which chat belongs to which project; `--workdir` filters the list to one project directory (including subdirectories). `sessions show` prints a thinking preview per turn when the agent exposed reasoning. Older session files without these fields keep loading unchanged.
 
+To use indexed SQLite session storage, add this top-level setting to
+`~/.config/agent-relay/config.toml` (before any `[agents.*]` sections):
+
+```toml
+session_storage = "sqlite"
+```
+
+Relay creates `sessions.db` in the config directory and imports existing JSON
+sessions transactionally on first use. If any session cannot be imported, the
+import fails without marking it complete; fix the file and retry. Original JSON
+files remain unchanged. Subsequent writes append turns with stable IDs, so
+concurrent saves retain both turns and retries do not duplicate them. Room and
+project filters use indexed queries. Session content still consists of previews
+and native harness thread IDs; harnesses retain their full conversation history.
+
+The default remains `session_storage = "json"`. Switching back reads the original
+JSON files; changes made in SQLite are not copied back. Avoid mixing JSON and
+SQLite writers for the same sessions during the switch. Chat presence, inboxes,
+room feeds and roundtable transcripts keep their existing storage formats.
+
 ## Rooms
 
 Rooms group sessions by topic across project directories. Tag a session with `--room` (the room is created on first use); `pipe` accepts the flag too since it shares the ask flags.

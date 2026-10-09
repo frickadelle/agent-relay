@@ -17,6 +17,7 @@ import (
 const previewLen = 300
 
 type Turn struct {
+	ID              string    `json:"id,omitempty"`
 	Agent           string    `json:"agent"`
 	NativeID        string    `json:"native_session,omitempty"`
 	PromptPreview   string    `json:"prompt_preview,omitempty"`
@@ -26,11 +27,12 @@ type Turn struct {
 }
 
 type Session struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Workdir   string    `json:"workdir,omitempty"`
-	Room      string    `json:"room,omitempty"`
-	Turns     []Turn    `json:"turns"`
+	ID         string    `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	Workdir    string    `json:"workdir,omitempty"`
+	Room       string    `json:"room,omitempty"`
+	Turns      []Turn    `json:"turns"`
+	savedTurns int
 }
 
 func Dir() string {
@@ -53,7 +55,7 @@ func path(id string) string {
 	return filepath.Join(Dir(), id+".json")
 }
 
-func Save(s *Session) error {
+func jsonSave(s *Session) error {
 	if err := os.MkdirAll(Dir(), 0o755); err != nil {
 		return err
 	}
@@ -64,7 +66,7 @@ func Save(s *Session) error {
 	return os.WriteFile(path(s.ID), data, 0o644)
 }
 
-func Load(id string) (*Session, error) {
+func jsonLoad(id string) (*Session, error) {
 	data, err := os.ReadFile(path(id))
 	if err != nil {
 		return nil, fmt.Errorf("load session %q: %w", id, err)
@@ -76,14 +78,14 @@ func Load(id string) (*Session, error) {
 	return &s, nil
 }
 
-func Remove(id string) error {
+func jsonRemove(id string) error {
 	if err := os.Remove(path(id)); err != nil {
 		return fmt.Errorf("remove session %q: %w", id, err)
 	}
 	return nil
 }
 
-func List() ([]*Session, error) {
+func jsonList() ([]*Session, error) {
 	entries, err := os.ReadDir(Dir())
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -96,7 +98,7 @@ func List() ([]*Session, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		s, err := Load(strings.TrimSuffix(e.Name(), ".json"))
+		s, err := jsonLoad(strings.TrimSuffix(e.Name(), ".json"))
 		if err != nil {
 			continue
 		}
@@ -127,6 +129,7 @@ func (s *Session) LastNativeID(agent string) string {
 
 func (s *Session) AddTurn(agent, nativeID, prompt, reply, thinking string) {
 	s.Turns = append(s.Turns, Turn{
+		ID:              newTurnID(),
 		Agent:           agent,
 		NativeID:        nativeID,
 		PromptPreview:   truncate(prompt),

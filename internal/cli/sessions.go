@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/frickadelle/agent-relay/internal/session"
@@ -21,15 +20,9 @@ var sessionsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List relay sessions, newest first",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		list, err := session.List()
+		list, err := session.ListFiltered(session.Filter{Room: sessionsListRoom, Workdir: sessionsListWorkdir})
 		if err != nil {
 			return err
-		}
-		if sessionsListWorkdir != "" {
-			list = filterByWorkdir(list, sessionsListWorkdir)
-		}
-		if sessionsListRoom != "" {
-			list = filterByRoom(list, sessionsListRoom)
 		}
 		if len(list) == 0 {
 			fmt.Println("no sessions yet")
@@ -57,31 +50,6 @@ var sessionsListCmd = &cobra.Command{
 		}
 		return nil
 	},
-}
-
-// filterByRoom keeps sessions tagged with exactly this room name.
-func filterByRoom(list []*session.Session, room string) []*session.Session {
-	var out []*session.Session
-	for _, s := range list {
-		if s.Room == room {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-// filterByWorkdir keeps sessions that ran in dir or below it, so one project
-// directory lists exactly the chats that worked on it.
-func filterByWorkdir(list []*session.Session, dir string) []*session.Session {
-	dir = filepath.Clean(dir)
-	var out []*session.Session
-	for _, s := range list {
-		wd := filepath.Clean(s.Workdir)
-		if wd == dir || strings.HasPrefix(wd, dir+string(filepath.Separator)) {
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 var sessionsShowCmd = &cobra.Command{
