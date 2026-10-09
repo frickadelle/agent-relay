@@ -1,6 +1,6 @@
 # README roundtable artwork
 
-Generated with the built-in `image_gen` tool. The README embeds the ASCII version; the PNG is the retained source illustration.
+The README uses hand-drawn ASCII line art of Codex, Claude and OpenCode collaborating at a shared table. The original image generated with the built-in `image_gen` tool is retained as a concept reference.
 
 ## Generation prompt
 
@@ -15,9 +15,11 @@ Text: no words, no labels, no fine text; terminal face glyphs only.
 Constraints: strong readable silhouettes; clearly oval tabletop plus short legs below; no watermark, no extra characters, no fine detail.
 ```
 
-## Conversion
+## ASCII artwork
 
-Converted with Pillow to grayscale, then downsampled with Lanczos to 100 columns and a row count equal to `round(height / width * 100 * 0.57)` to compensate for monospace character proportions. Each pixel maps to ` .:+#@` using `max(0, min(5, round((245 - gray) / 245 * 5)))`. Blank outer rows and trailing spaces are removed. Harness labels are added as plain text above the converted image.
+The initial automatic raster conversion produced noisy shading and was replaced
+with hand-drawn ASCII outlines. The scene uses labeled robot faces, three laptops
+and one shared table, with a maximum width of 69 characters.
 
-The `roundtable.txt` file exactly matches the README fenced block. The source is a conceptual mascot illustration, rather than official harness logos.
-
+`roundtable.txt` exactly matches the README fenced block. These are conceptual
+mascots, rather than official harness logos.
