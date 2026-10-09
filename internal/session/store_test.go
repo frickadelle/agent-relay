@@ -3,6 +3,8 @@ package session
 import (
 	"testing"
 	"time"
+
+	"github.com/frickadelle/agent-relay/internal/config"
 )
 
 func TestSaveLoadRoundtrip(t *testing.T) {
@@ -120,5 +122,53 @@ func TestRoomRoundtrip(t *testing.T) {
 	}
 	if got.Room != "billing-migration" {
 		t.Errorf("Room = %q, want billing-migration", got.Room)
+	}
+}
+
+func TestListFilteredStorageBackends(t *testing.T) {
+	for _, backend := range []string{"json", "sqlite"} {
+		t.Run(backend, func(t *testing.T) {
+			t.Setenv("AGENT_RELAY_CONFIG_DIR", t.TempDir())
+			cfg := config.Default()
+			cfg.SessionStorage = backend
+			if err := cfg.Save(); err != nil {
+				t.Fatal(err)
+			}
+			old := New("/p/api/")
+			old.ID = "old"
+			old.CreatedAt = time.Now().Add(-time.Hour)
+			old.Room = "billing"
+			newer := New("/p/api/sub")
+			newer.ID = "newer"
+			newer.Room = "auth"
+			other := New("/p/api-other")
+			other.Room = "billing"
+			for _, s := range []*Session{old, newer, other} {
+				if err := Save(s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, tc := range []struct {
+				filter Filter
+				want   []string
+			}{
+				{Filter{Workdir: "/p/api"}, []string{"newer", "old"}},
+				{Filter{Workdir: "/p/api", Room: "billing"}, []string{"old"}},
+				{Filter{Room: "missing"}, nil},
+			} {
+				list, err := ListFiltered(tc.filter)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(list) != len(tc.want) {
+					t.Fatalf("filter %+v: got %d sessions, want %d", tc.filter, len(list), len(tc.want))
+				}
+				for i, id := range tc.want {
+					if list[i].ID != id {
+						t.Fatalf("filter %+v: got %q, want %q", tc.filter, list[i].ID, id)
+					}
+				}
+			}
+		})
 	}
 }

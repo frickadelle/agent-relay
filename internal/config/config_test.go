@@ -86,3 +86,25 @@ func TestSandboxDefaultsToReadOnlyForCodex(t *testing.T) {
 		t.Errorf("claude sandbox = %q, want empty", got)
 	}
 }
+
+func TestSessionStorageConfiguration(t *testing.T) {
+	dir := testDir(t)
+	cfg, err := Load()
+	if err != nil || cfg.SessionStorage != "json" {
+		t.Fatalf("default storage: %+v, %v", cfg, err)
+	}
+	cfg.SessionStorage = "sqlite"
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load()
+	if err != nil || cfg.SessionStorage != "sqlite" {
+		t.Fatalf("SQLite storage: %+v, %v", cfg, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("session_storage = \"sqilte\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(); err == nil {
+		t.Fatal("expected invalid storage error")
+	}
+}
